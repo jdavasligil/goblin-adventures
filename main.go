@@ -29,16 +29,45 @@ import (
 
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/twitch"
+
+	"github.com/gorilla/websocket"
 )
 
 var (
-	clientID = "ui5s8b0hvlw4uz6fzd752kbvk6zipj"
-	clientSecret = ""
+	clientID string
+	clientSecret string
 	oauth2Config *clientcredentials.Config
+	upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
 )
 
 type JSONResponse struct {
-	Data any `json:"data"`
+	Data []map[string]any `json:"data"`
+}
+
+// Echo server
+func wsHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer conn.Close()
+
+	for {
+		_, message, err := conn.ReadMessage()
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		fmt.Printf("Received: %s\n", message);
+		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			log.Println(err)
+		}
+	}
 }
 
 func getEnvironmentVariables() map[string]string {
@@ -63,6 +92,10 @@ func getEnvironmentVariables() map[string]string {
 func main() {
 	envVars := getEnvironmentVariables()
 
+	clientID = envVars["CLIENT_ID"]
+	if clientID == "" {
+		log.Fatalln("Fatal Error! CLIENT_ID is not present in .env")
+	}
 	clientSecret = envVars["CLIENT_SECRET"]
 	if clientSecret == "" {
 		log.Fatalln("Fatal Error! CLIENT_SECRET is not present in .env")
@@ -108,5 +141,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Print(jsonResponse)
+	resMap := jsonResponse.Data[0]
+	fmt.Println(resMap["broadcaster_type"])
+	fmt.Println(resMap["description"])
+
+	http.HandleFunc("/ws", wsHandler)
+	fmt.Println("WebSocket server started on :3000")
+	err = http.ListenAndServe(":3000", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
