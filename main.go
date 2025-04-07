@@ -4,7 +4,7 @@ const (
 	Host   = "127.0.0.1"
 	Port   = ":8000"
 	Addr   = Host + Port
-	BotURI = "https://" + Host + Port
+	BotURI = "https://" + Addr
 
 	CertFile = "certs/localhost.crt"
 	KeyFile  = "certs/localhost.key"
