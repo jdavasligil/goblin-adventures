@@ -274,17 +274,18 @@ func (b *ChatBot) ValidateUserAuthToken() {
 	}
 	defer response.Body.Close()
 
-	resBody, err := io.ReadAll(response.Body)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+	// resBody, err := io.ReadAll(response.Body)
+	// if err != nil {
+	// 	log.Println(err)
+	// 	return
+	// }
 
-	fmt.Println(string(resBody))
+	//fmt.Println(string(resBody))
 	// TODO Destructure json https://dev.twitch.tv/docs/authentication/validate-tokens/
 	// perform proper validation
 }
 
+// MUST be called AFTER GetClientAuthToken
 func (b *ChatBot) RequestUserInfo(user string) {
 	req := &http.Request{
 		Method: "GET",
@@ -455,46 +456,55 @@ func (b *ChatBot) RegisterEventSubListeners() {
 			log.Println(err)
 			return
 		}
-		log.Println(jsonResponse.Status, jsonResponse.Error, jsonResponse.Message)
+		log.Fatal(jsonResponse.Status, jsonResponse.Error, jsonResponse.Message)
 		return
 	}
-	//TEMP
-	fmt.Println(string(reqBody))
-	jsonResponse := &JSONResponse{}
-	err = json.Unmarshal(reqBody, jsonResponse)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	resMap := jsonResponse.Data[0]
-	PrettyPrint(resMap)
 }
 
 func (b *ChatBot) HandleMessage(m []byte) {
-	msg := &WSResponse{}
+	msg := &WSMessageType{}
 	err := json.Unmarshal(m, msg)
 	if err != nil {
 		log.Println("handle:", err)
 	}
-	//fmt.Println("MESSAGE RECV:")
-	//PrettyPrint(msg)
-	msgType := msg.Metadata["message_type"]
+
+	fmt.Println("\nMESSAGE RECV:")
+	PrettyPrint(msg)
+	msgType := msg.Metadata.MessageType
+
 	switch msgType {
 	case "session_welcome":
-		session := msg.Payload["session"].(map[string]any)
-		b.sessionID = session["id"].(string)
+		session := &WSSessionID{}
+		err := json.Unmarshal(m, session)
+		if err != nil {
+			log.Println("session:", err)
+		}
+		status := session.Payload.Session.Status
+		if status != "connected" {
+			log.Printf("session: Status <%s> -- session not connected.\n", status)
+			b.shutdown <- true
+			return
+		}
+		b.sessionID = session.Payload.Session.ID
 		go b.RegisterEventSubListeners()
+
 	case "notification":
-		subType := msg.Metadata["subscription_type"].(string)
+		subType := msg.Metadata.SubscriptionType
 		switch subType {
 		case "channel.chat.message":
-			event := msg.Payload["event"].(map[string]any)
-			chatterUserID := event["chatter_user_id"]
-			chatMessage := event["message"].(map[string]any)
-			chatText := chatMessage["text"].(string)
+			// TODO: Limit chat message struct to necessary elements only
+			chat := &WSChatMessage{}
+			err := json.Unmarshal(m, chat)
+			if err != nil {
+				log.Println("chat:", err)
+			}
+			event := chat.Payload.Event
+			chatterUserID := event.ChatterUserId
+			chatText := event.Message.Text
 			if chatterUserID == b.BroadcasterID {
 				if strings.ToLower(chatText) == "!shutdown" {
 					b.shutdown <- true
+					return
 				}
 			}
 		}
