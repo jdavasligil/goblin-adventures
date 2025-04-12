@@ -17,7 +17,7 @@ const (
 )
 
 func main() {
-	bot := &ChatBot{}
+	bot := &ChatBot{ CommandPrefix: '!' }
 	bot.GetEnvironmentVariables()
 	bot.MakeAuthRequest()
 	bot.GetUserAuthToken()

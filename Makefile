@@ -14,7 +14,7 @@ build:
 	@go build -tags "linux" -o ./build/bot ./cmd/bot
 
 .PHONY: test
-test:
+test: cleantest
 	@go test -v ./...
 
 .PHONY: run
@@ -24,6 +24,10 @@ run:
 .PHONY: clean
 clean:
 	@go clean && rm -rf ./build/*
+
+.PHONY: cleantest
+cleantest:
+	@rm -f ./db/test.db
 
 .PHONY: cleandb
 cleandb:

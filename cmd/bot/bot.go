@@ -37,10 +37,15 @@ type UserToken struct {
 }
 
 type ChatBot struct {
+	GameCommandOut chan string // For sending commands to the game server
+	GameMessageIn  chan string // For getting messages from the game server
+
 	UserID        string
 	ClientID      string
 	BroadcasterID string
 	sessionID     string
+
+	CommandPrefix byte
 
 	clientSecret string
 	oauth2Config *clientcredentials.Config
@@ -461,6 +466,24 @@ func (b *ChatBot) RegisterEventSubListeners() {
 	}
 }
 
+func (b *ChatBot) ProcessCommand(userID string, username string, text string) {
+	if len(text) == 0 || text[0] != b.CommandPrefix {
+		return
+	}
+	cmd := strings.ToLower(text[1:])
+	admin := userID == b.BroadcasterID 
+	if cmd == "shutdown" {
+		if admin {
+			b.shutdown <- true
+			b.GameCommandOut <- "shutdown"
+			return
+		} else {
+			return
+		}
+	}
+	b.GameCommandOut <- strings.Join([]string{userID, username, cmd}, " ")
+}
+
 func (b *ChatBot) HandleMessage(m []byte) {
 	msg := &WSMessageType{}
 	err := json.Unmarshal(m, msg)
@@ -500,17 +523,14 @@ func (b *ChatBot) HandleMessage(m []byte) {
 			}
 			event := chat.Payload.Event
 			chatterUserID := event.ChatterUserId
+			chatterUsername:= event.ChatterUserName
 			chatText := event.Message.Text
-			if chatterUserID == b.BroadcasterID {
-				if strings.ToLower(chatText) == "!shutdown" {
-					b.shutdown <- true
-					return
-				}
-			}
+			b.ProcessCommand(chatterUserID, chatterUsername, chatText)
 		}
 	}
 }
 
+// TODO: Send chat messages to Twitch
 func (b *ChatBot) Run() {
 
 	interrupt := make(chan os.Signal, 1)
@@ -585,6 +605,7 @@ func (b *ChatBot) Run() {
 		return
 	}
 	select {
+	// TODO: Add blocker to wait for game server shutdown
 	case <-done:
 	case <-time.After(time.Second):
 	}
