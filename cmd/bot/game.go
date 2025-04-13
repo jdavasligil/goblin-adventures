@@ -11,10 +11,11 @@ import (
 )
 
 type GameServer struct {
-	CommandsIn  chan string // For getting commands from bot
+	CommandsIn chan string // For getting commands from bot
+	Interrupt  chan os.Signal
+	Shutdown   chan struct{}
+
 	MessagesOut chan string // For sending messages to bot
-	Interrupt   chan os.Signal
-	Shutdown    chan struct{}
 
 	DB *sql.DB
 
@@ -26,7 +27,7 @@ type GameServer struct {
 }
 
 func NewGameServer() *GameServer {
-	db, err := NewGameDB("game.db") 
+	db, err := NewGameDB("game.db")
 	if err != nil {
 		log.Fatalln("db:", err)
 	}
@@ -47,6 +48,19 @@ func NewGameServer() *GameServer {
 		TickRate: 32 * time.Millisecond,
 	}
 }
+
+func (g *GameServer) EnsureRegistered(uid string) error {
+	_, err := g.Query[QueryUser].Query(uid)
+	if err != nil {
+		log.Println("USER", uid, "DOES NOT EXIST")
+		CreateCharacter(g.DB, uid)
+	} else {
+		log.Println("USER", uid, "EXISTS")
+	}
+
+	return nil
+}
+
 // ASSUME cmdString has shape "<UserID> <Username> <Cmd> <Cmd Options>..."
 // ASSUME commands are authorized by the bot
 // Returns true to continue, false to shutdown
@@ -65,7 +79,7 @@ func (g *GameServer) HandleCommands() bool {
 		uname := parts[1]
 		cmd := parts[2:]
 
-		EnsureRegistered(uid, uname)
+		g.EnsureRegistered(uid)
 
 		err := g.Query[QueryCommand].QueryRow(cmd[0]).Scan(&command, &commandType)
 		if err != nil {
@@ -75,7 +89,9 @@ func (g *GameServer) HandleCommands() bool {
 
 		switch command {
 		case "join":
-			log.Println("game:", uname, "joined the party!")
+			m := "game: " + uname + " joined the party!"
+			log.Println(m)
+			g.MessagesOut <- m
 		case "inspect":
 			opts := cmd[1:]
 			if len(opts) < 1 {

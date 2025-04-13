@@ -1,3 +1,5 @@
+build_tags = "linux sqlite_foreign_keys"
+
 .PHONY: all
 all: fmt tidy test build run
 
@@ -11,15 +13,15 @@ tidy:
 
 .PHONY: build
 build:
-	@go build -tags "linux" -o ./build/bot ./cmd/bot
+	@go build -tags $(build_tags) -o ./build/bot/bot ./cmd/bot
 
 .PHONY: test
 test: cleantest
-	@go test -v ./...
+	@go test -tags $(build_tags) -v ./...
 
 .PHONY: run
 run:
-	@./build/bot
+	@./build/bot/bot
 
 .PHONY: clean
 clean:

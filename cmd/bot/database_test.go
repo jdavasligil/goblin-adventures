@@ -24,3 +24,15 @@ func TestInitQuery(t *testing.T) {
 		t.Fatal("QueryCommand is nil")
 	}
 }
+
+func TestCreateDeleteCharacter(t *testing.T) {
+	db, err := NewGameDB("test.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	CreateCharacter(db, "TestChar1")
+	CreateCharacter(db, "TestChar2")
+	DeleteCharacter(db, "TestChar1")
+	CreateCharacter(db, "TestChar3")
+	CreateCharacter(db, "TestChar4")
+}

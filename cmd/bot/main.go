@@ -17,12 +17,9 @@ const (
 )
 
 func main() {
-	bot := &ChatBot{ CommandPrefix: '!' }
-	bot.GetEnvironmentVariables()
-	bot.MakeAuthRequest()
-	bot.GetUserAuthToken()
-	//bot.GetClientAuthToken()
+	gameServer := NewGameServer()
+	bot := NewChatBot(gameServer)
 	//bot.RequestUserInfo("crashtestgoblin")
+	go gameServer.Run()
 	bot.Run()
-	//bot.SendMessage("Hello!")
 }

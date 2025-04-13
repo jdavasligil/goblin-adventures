@@ -37,8 +37,11 @@ type UserToken struct {
 }
 
 type ChatBot struct {
+	GameMessageIn chan string // For getting messages from the game server
+
 	GameCommandOut chan string // For sending commands to the game server
-	GameMessageIn  chan string // For getting messages from the game server
+	GameInterrupt  chan os.Signal
+	GameDone       chan struct{}
 
 	UserID        string
 	ClientID      string
@@ -57,6 +60,27 @@ type ChatBot struct {
 	shutdown chan bool
 
 	conn *websocket.Conn
+}
+
+func NewChatBot(g *GameServer) *ChatBot {
+	b := &ChatBot{
+		GameMessageIn: make(chan string, 32),
+		CommandPrefix: '!',
+	}
+	HookBotAndGameServer(b, g)
+	b.GetEnvironmentVariables()
+	b.MakeAuthRequest()
+	b.GetUserAuthToken()
+
+	return b
+}
+
+func HookBotAndGameServer(b *ChatBot, g *GameServer) {
+	g.MessagesOut = b.GameMessageIn
+
+	b.GameCommandOut = g.CommandsIn
+	b.GameInterrupt = g.Interrupt
+	b.GameDone = g.Shutdown
 }
 
 func (b *ChatBot) GetEnvironmentVariables() {
@@ -228,7 +252,7 @@ func (b *ChatBot) GetUserAuthToken() {
 		log.Println("json:", err)
 	}
 
-	fmt.Print("\nbot: Token received. Expires in ", float32(b.userToken.ExpiresIn)/3600.0, " hours.\n\n")
+	//fmt.Print("\nbot: Token received. Expires in ", float32(b.userToken.ExpiresIn)/3600.0, " hours.\n\n")
 
 	b.ValidateUserAuthToken()
 }
@@ -341,6 +365,7 @@ func (b *ChatBot) SendMessage(m string) {
 	})
 	if err != nil {
 		log.Println(err)
+		return
 	}
 
 	req := &http.Request{
@@ -471,7 +496,7 @@ func (b *ChatBot) ProcessCommand(userID string, username string, text string) {
 		return
 	}
 	cmd := strings.ToLower(text[1:])
-	admin := userID == b.BroadcasterID 
+	admin := userID == b.BroadcasterID
 	if cmd == "shutdown" {
 		if admin {
 			b.shutdown <- true
@@ -491,8 +516,9 @@ func (b *ChatBot) HandleMessage(m []byte) {
 		log.Println("handle:", err)
 	}
 
-	fmt.Println("\nMESSAGE RECV:")
-	PrettyPrint(msg)
+	// DEBUG:
+	//fmt.Println("\nMESSAGE RECV:")
+	//PrettyPrint(msg)
 	msgType := msg.Metadata.MessageType
 
 	switch msgType {
@@ -523,7 +549,7 @@ func (b *ChatBot) HandleMessage(m []byte) {
 			}
 			event := chat.Payload.Event
 			chatterUserID := event.ChatterUserId
-			chatterUsername:= event.ChatterUserName
+			chatterUsername := event.ChatterUserName
 			chatText := event.Message.Text
 			b.ProcessCommand(chatterUserID, chatterUsername, chatText)
 		}
@@ -586,14 +612,20 @@ func (b *ChatBot) Run() {
 			log.Println("websocket: All Done.")
 			alive = false
 		case <-ticker.C:
+			select {
+			case m := <-b.GameMessageIn:
+				b.SendMessage(m)
+			default:
+			}
 			//err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
 			//if err != nil {
 			//	log.Println("write:", err)
 			//	return
 			//}
-		case <-interrupt:
+		case sig := <-interrupt:
 			log.Println("websocket: Interrupt received.")
 			alive = false
+			b.GameInterrupt <- sig
 			b.shutdown <- true
 		}
 	}
@@ -605,8 +637,11 @@ func (b *ChatBot) Run() {
 		return
 	}
 	select {
-	// TODO: Add blocker to wait for game server shutdown
 	case <-done:
+	case <-time.After(time.Second):
+	}
+	select {
+	case <-b.GameDone:
 	case <-time.After(time.Second):
 	}
 }
