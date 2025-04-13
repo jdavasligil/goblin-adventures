@@ -10,6 +10,39 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+// TODO: Game Loop ->
+//  1. New Game: Players !join to fill the dungeon party
+//  2. Start:    After 10 seconds or when full, start crawl
+//  3. Crawl:    Dungeon is generated procedurally one room at a time
+//               Players may explore at the risk of deadly traps and combat
+//  4. Combat:   In combat play proceeds round by round.
+
+// Commonly modified values are cached in Character
+type Character struct {
+	Might   int
+	Agility int
+	Will    int
+
+	AgilityMax int
+	MightMax   int
+	WillMax    int
+
+	HP    int
+	HPMax int
+
+	AttackDie     int
+	NumAttackDice int
+	AttackBonus   int
+
+	Defense int
+}
+
+type Party struct {
+	PlayersMax int
+
+	PlayerCharacters map[string]Character
+}
+
 type GameServer struct {
 	CommandsIn chan string // For getting commands from bot
 	Interrupt  chan os.Signal
@@ -21,7 +54,7 @@ type GameServer struct {
 
 	Query []*sql.Stmt
 
-	Players map[string]bool
+	Party
 
 	TickRate time.Duration
 }

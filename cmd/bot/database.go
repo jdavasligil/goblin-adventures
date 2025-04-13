@@ -183,7 +183,6 @@ func CreateCharacterTable(db *sql.DB) error {
 		agility INTEGER NOT NULL, 
 		will INTEGER NOT NULL ,
 
-		hp_max INTEGER NOT NULL, 
 		hp INTEGER NOT NULL
 	) STRICT;
 	`)
@@ -327,9 +326,8 @@ func CreateCharacter(db *sql.DB, twitch_id string) error {
 		might,
 		agility,
 		will,
-		hp_max,
 		hp
-		) VALUES (?, last_insert_rowid(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, last_insert_rowid(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 	if err != nil {
 		return errors.Join(err, tx.Rollback())
@@ -348,7 +346,7 @@ func CreateCharacter(db *sql.DB, twitch_id string) error {
 	}
 
 	// TODO: Randomly generate values
-	_, err = charStmt.Exec(twitch_id, 1, 1, 1, 0, 0, 9, 9, 9, 4, 4)
+	_, err = charStmt.Exec(twitch_id, 1, 1, 1, 0, 0, 9, 9, 9, 4)
 	if err != nil {
 		return errors.Join(err, tx.Rollback())
 	}
