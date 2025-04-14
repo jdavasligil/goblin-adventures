@@ -76,7 +76,10 @@ func NewGameServer() *GameServer {
 		DB:    db,
 		Query: q,
 
-		Players: make(map[string]bool),
+		Party: Party{
+			PlayersMax: 10,
+			PlayerCharacters: make(map[string]Character),
+		},
 
 		TickRate: 32 * time.Millisecond,
 	}

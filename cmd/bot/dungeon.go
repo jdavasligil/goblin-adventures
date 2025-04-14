@@ -1,6 +1,9 @@
 package main
 
-import "math/rand"
+import (
+	"fmt"
+	"math/rand"
+)
 
 // TODO: Dungeon Generation
 // - A new seed offset is generated for each delve.
@@ -45,7 +48,7 @@ import "math/rand"
 
 // Chunk type can be described by the quadruplet ABCD where A,B,C,D are in [0-6]
 // and describe the N, S, E, and W boundary type.
-// Thus, there are 6^3 = 216 possible chunks by door boundary alone.
+// Thus, there are 7^3 = 343 possible chunks by door boundary alone.
 
 // Connection Rules (opposites attract)
 //    |     |
@@ -60,6 +63,23 @@ import "math/rand"
 // Note: Only patterns 1/3 and 4/6 have chirality; 0, 2, and 5 are symmetric.
 
 // Note Doors connect 2 rooms together, so both rooms need to map to the door.
+
+// Number of possible interior chunk connections:
+//  #-#-#  #-#-#  #-#-#  #X#-#  #X#X# 
+//  | | |  | | |  | | |  X | |  X   X 
+//  #-#-#  #-#-#  #-#-#  # #-#  # #X# 
+//  | | |  X | |  X X    X X    X X   
+//  #-#-#  # #-#  # #X#  # #X#  # #X# 
+//   12     10      7     4       1
+// Difficult to count because different edits result in more or less options.
+// Graph theory to the rescue!
+// OEIS sequence A001187 for the number of distinct connected labeled graphs
+// with n nodes produces the result of 66296291072! Hence there are
+// 4 * 343 * 66296291072 = 90958511350784 possibilities.
+
+type ChunkType uint32
+
+// COORDINATES: World(X, Y) -> Chunk(U, V) -> Room(S, T)
 
 type DoorState byte
 
@@ -105,10 +125,10 @@ type RoomData struct {
 }
 
 type Dungeon struct {
-	Seed      int64
-	Rand      rand.Rand
-	Level     int
-	RoomCache map[int]RoomData
+	Seed   int64
+	Rand   rand.Rand
+	Level  int
+	Chunks [9]Chunk
 }
 
 func hash(p Position) int64 {
@@ -117,9 +137,11 @@ func hash(p Position) int64 {
 	if a >= b {
 		return a*a + a + b
 	} else {
+		fmt.Print("hi")
 		return a + b*b
 	}
 }
+
 
 func (d Dungeon) Update(newPos Position) {
 	d.Rand.Seed(d.Seed + hash(newPos))
