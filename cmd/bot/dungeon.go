@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 )
 
 // TODO: Dungeon Generation
@@ -11,75 +11,15 @@ import (
 //   (hashing) the coordinate by position. Room edits are stored and replayed.
 // - Data is kept in the game DB. Such data is queried using the Query slice
 
-// Preventing paradoxes? One way doors, etc?
-// We need to generate a "Chunk" of rooms based on set patterns.
-// Each Chunk has at least one egress in each direction.
-// It is guaranteed for chunks to tile correctly, and to be connected.
-// A Chunk is a set of 9 (3x3) rooms.
-// This is just for door patterns.
 
-// Fully Connected
-//  | | |
-// -#-#-#-
-//  | | |
-// -#-#-#-
-//  | | |
-// -#-#-#-
-//  | | |
-
-// Minimally Connected (Tree)
-//    |     |
-//  # # #  -# #-#
-//  | | |   | | |
-// -#-#-#-  # # #
-//  | | |   | | |
-//  # # #   #-# #-
-//    |         |
-
-// Door Boundary Patterns (As observed from the center room facing outward)
-// 0: | | |
-// 1: | | _
-// 2: | _ |
-// 3: _ | |
-// 4: | _ _
-// 5: _ | _
-// 6: _ _ |
-// Adjacent chunks must mirror the boundary pattern of their neighbor
-
-// Chunk type can be described by the quadruplet ABCD where A,B,C,D are in [0-6]
-// and describe the N, S, E, and W boundary type.
-// Thus, there are 7^3 = 343 possible chunks by door boundary alone.
-
-// Connection Rules (opposites attract)
-//    |     |
-//  # # #- -# #-#
-//  | | |   | | |
-// -#-#-#- -# # #
-//  | | |   | | |
-//  # # #   #-# #-
-//    |         |
-// The mating between the two chunks in the example (E to W or C-D) has boundaries
-// 1: | | _ (left) to 3: _ | |
-// Note: Only patterns 1/3 and 4/6 have chirality; 0, 2, and 5 are symmetric.
-
-// Note Doors connect 2 rooms together, so both rooms need to map to the door.
-
-// Number of possible interior chunk connections:
-//  #-#-#  #-#-#  #-#-#  #X#-#  #X#X# 
-//  | | |  | | |  | | |  X | |  X   X 
-//  #-#-#  #-#-#  #-#-#  # #-#  # #X# 
-//  | | |  X | |  X X    X X    X X   
-//  #-#-#  # #-#  # #X#  # #X#  # #X# 
-//   12     10      7     4       1
-// Difficult to count because different edits result in more or less options.
-// Graph theory to the rescue!
-// OEIS sequence A001187 for the number of distinct connected labeled graphs
-// with n nodes produces the result of 66296291072! Hence there are
-// 4 * 343 * 66296291072 = 90958511350784 possibilities.
-
-type ChunkType uint32
+const SEEDCONST uint64 = 3355278010277430012
 
 // COORDINATES: World(X, Y) -> Chunk(U, V) -> Room(S, T)
+// MUST be perfect squares
+const (
+	CHUNKSIZE int = 16
+	CHUNKCOUNT    = 9
+)
 
 type DoorState byte
 
@@ -107,10 +47,8 @@ const (
 )
 
 type Chunk struct {
-	// 0 1 2
-	// 3 4 5
-	// 6 7 8
-	Rooms [9]RoomData // [X + 3Y], (0,0) is top-left
+    // Index by [X + CHUNKSIZE * Y], (0,0) is top-left
+	Rooms [CHUNKSIZE]Room
 }
 
 type Position struct {
@@ -118,31 +56,39 @@ type Position struct {
 	Y int
 }
 
-type RoomData struct {
+type Room struct {
 	Stairs StairState
 	// 0 1 2 3 = N S E W
 	Doors [4]DoorState
 }
 
 type Dungeon struct {
-	Seed   int64
-	Rand   rand.Rand
-	Level  int
-	Chunks [9]Chunk
+	Seed      uint64
+	RandState rand.PCG
+	Rand      rand.Rand
+
+	RoomPos  Position
+	ChunkPos Position
+	Level     int
+
+	Chunks    [CHUNKCOUNT]Chunk
 }
 
-func hash(p Position) int64 {
-	var a int64 = int64(p.X)
-	var b int64 = int64(p.Y)
-	if a >= b {
-		return a*a + a + b
-	} else {
-		fmt.Print("hi")
-		return a + b*b
+func NewDungeon(seed uint64) *Dungeon {
+	pcg := rand.NewPCG(seed, SEEDCONST ^ seed)
+	d := &Dungeon{
+		Seed:      seed,
+		RandState: *pcg,
+		Rand: *rand.New(pcg)
 	}
+	return d
 }
 
+func (p Position) Hash() uint64 {
+	return uint64(p.X)<<32 | uint64(p.Y)
+}
 
-func (d Dungeon) Update(newPos Position) {
-	d.Rand.Seed(d.Seed + hash(newPos))
+func (d *Dungeon) Update(newPos Position) {
+	seed := newPos.Hash() ^ d.Seed
+	d.RandState.Seed(seed, SEEDCONST ^ seed)
 }
