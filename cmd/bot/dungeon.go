@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"math/rand/v2"
 )
 
@@ -11,14 +10,12 @@ import (
 //   (hashing) the coordinate by position. Room edits are stored and replayed.
 // - Data is kept in the game DB. Such data is queried using the Query slice
 
-
 const SEEDCONST uint64 = 3355278010277430012
 
-// COORDINATES: World(X, Y) -> Chunk(U, V) -> Room(S, T)
-// MUST be perfect squares
+// MUST be a perfect square
 const (
-	CHUNKSIZE int = 16
-	CHUNKCOUNT    = 9
+	CHUNKSIZE     int = 16
+	CHUNKSIZEROOT     = 4
 )
 
 type DoorState byte
@@ -31,6 +28,14 @@ const (
 	DoorLocked
 )
 
+var DoorCDF = []float32{
+	0.00,
+	0.20,
+	0.70,
+	0.90,
+	1.00,
+}
+
 type StairState byte
 
 const (
@@ -39,15 +44,31 @@ const (
 	StairUp
 )
 
+var StairCDF = []float32{
+	0.80,
+	0.90,
+	1.00,
+}
+
 const (
 	North int = iota
-	South
 	East
+	South
 	West
 )
 
+// Cast result as state type.
+func RandomState(rng *rand.Rand, cdf []float32) int {
+	for i, p := range cdf {
+		if rng.Float32() < p {
+			return i
+		}
+	}
+	return 0
+}
+
 type Chunk struct {
-    // Index by [X + CHUNKSIZE * Y], (0,0) is top-left
+	// Index by [X + CHUNKSIZE * Y], (0,0) is top-left
 	Rooms [CHUNKSIZE]Room
 }
 
@@ -58,37 +79,74 @@ type Position struct {
 
 type Room struct {
 	Stairs StairState
-	// 0 1 2 3 = N S E W
+	// 0 1 2 3 = N E S W
 	Doors [4]DoorState
+}
+
+func (r *Room) Randomize(rng *rand.Rand) {
+	r.Stairs = StairState(RandomState(rng, StairCDF))
 }
 
 type Dungeon struct {
 	Seed      uint64
 	RandState rand.PCG
-	Rand      rand.Rand
+	Rand      *rand.Rand
+
+	ConnectProbability float32
 
 	RoomPos  Position
 	ChunkPos Position
-	Level     int
+	Level    int
 
-	Chunks    [CHUNKCOUNT]Chunk
+	Chunk
 }
 
 func NewDungeon(seed uint64) *Dungeon {
-	pcg := rand.NewPCG(seed, SEEDCONST ^ seed)
 	d := &Dungeon{
 		Seed:      seed,
-		RandState: *pcg,
-		Rand: *rand.New(pcg)
+		RandState: *rand.NewPCG(seed, SEEDCONST^seed),
+
+		ConnectProbability: 0.25,
 	}
+	d.Rand = rand.New(&d.RandState)
+	d.RoomPos.X = CHUNKSIZE / 2
+	d.RoomPos.Y = CHUNKSIZE / 2
+	d.UpdateChunk()
+
 	return d
+}
+
+func (d *Dungeon) UpdateChunk() {
+	seed := d.ChunkPos.Hash() ^ d.Seed
+	d.RandState.Seed(seed, SEEDCONST^seed)
+	g := RandomConnectedGrid(d.Rand, CHUNKSIZEROOT, d.ConnectProbability)
+	for _, r := range d.Chunk.Rooms {
+		r.Randomize(d.Rand)
+	}
+
+	// Randomize doors with interior connections matching the graph
+	for v, adj := range g.List {
+		for _, w := range adj {
+			dir := g.RelativeGridDirection(v, w)
+			d.Chunk.Rooms[v].Doors[dir] = DoorState(RandomState(d.Rand, DoorCDF))
+			d.Chunk.Rooms[w].Doors[OppositeDirection(dir)] = d.Chunk.Rooms[w].Doors[South]
+		}
+	}
+
+	// TODO: Randomize outgoing doors for stitching chunks
 }
 
 func (p Position) Hash() uint64 {
 	return uint64(p.X)<<32 | uint64(p.Y)
 }
 
-func (d *Dungeon) Update(newPos Position) {
-	seed := newPos.Hash() ^ d.Seed
-	d.RandState.Seed(seed, SEEDCONST ^ seed)
+// N <-> S, E <-> W
+// Proof:
+//
+//	N: (0+2)%4 = 2 = S
+//	S: (2+2)%4 = 0 = N
+//	E: (1+2)%4 = 3 = W
+//	W: (3+2)%4 = 1 = E
+func OppositeDirection(dir int) int {
+	return int(uint(dir+2) & 0b00000011) // mod 4 in base 2 is a binary op
 }

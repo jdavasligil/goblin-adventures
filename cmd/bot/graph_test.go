@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-
 func TestNewGraph(t *testing.T) {
 	g := NewGraph(9, 4)
 	if g == nil || g.List == nil {
@@ -51,7 +50,7 @@ func TestBFS(t *testing.T) {
 		t.Fatal("Graph is not connected")
 	}
 
-	g.Disconnect(2,5)
+	g.Disconnect(2, 5)
 
 	_, found = g.BFS(0, 8)
 	if found {
@@ -65,10 +64,10 @@ func TestBFS(t *testing.T) {
 
 func TestRandomConnectedGrid(t *testing.T) {
 	rng := rand.New(rand.NewPCG(16490829034, 2923842757))
-	g := RandomConnectedGrid(rng, 3, 0.2)
+	g := RandomConnectedGrid(rng, 4, 0.0)
 	if !g.IsConnected() {
 		t.Log("Random grid is not connected")
 		t.Fail()
 	}
-	//g.PrintGrid()
+	g.PrintGrid()
 }

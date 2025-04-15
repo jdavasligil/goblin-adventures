@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"slices"
-	//"sort"
 	"strings"
 
 	"github.com/jdavasligil/go-ecs/pkg/queue"
@@ -60,13 +59,32 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 	g.IsGrid = true
 	g.GridSize = n
 
+	// Randomly make connections
+	for row := range n {
+		for col := range n {
+			v := row*n + col
+			// North
+			if rng.Float32() < p && (row-1) > 0 {
+				g.Connect(v, v-n)
+			}
+			// East
+			if rng.Float32() < p && (col+1) < n {
+				g.Connect(v, v+1)
+			}
+			// South
+			if rng.Float32() < p && (row+1) < n {
+				g.Connect(v, v+n)
+			}
+			// West
+			if rng.Float32() < p && (col-1) > 0 {
+				g.Connect(v, v-1)
+			}
+		}
+	}
+
+	// Ensure each vertex has at least one connection
+
 	// Top Left
-	if rng.Float32() < p {
-		g.Connect(0, 1)
-	}
-	if rng.Float32() < p {
-		g.Connect(0, n)
-	}
 	if len(g.List[0]) == 0 {
 		if rng.UintN(2) == 0 {
 			g.Connect(0, 1)
@@ -76,12 +94,6 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 	}
 
 	// Top Right
-	if rng.Float32() < p {
-		g.Connect(n-1, n-2)
-	}
-	if rng.Float32() < p {
-		g.Connect(n-1, 2*n-1)
-	}
 	if len(g.List[n-1]) == 0 {
 		if rng.UintN(2) == 0 {
 			g.Connect(n-1, n-2)
@@ -91,12 +103,6 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 	}
 
 	// Bottom Left
-	if rng.Float32() < p {
-		g.Connect(n*(n-1), n*(n-2))
-	}
-	if rng.Float32() < p {
-		g.Connect(n*(n-1), n*(n-1)+1)
-	}
 	if len(g.List[n*(n-1)]) == 0 {
 		if rng.UintN(2) == 0 {
 			g.Connect(n*(n-1), n*(n-2))
@@ -106,12 +112,6 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 	}
 
 	// Bottom Right
-	if rng.Float32() < p {
-		g.Connect(n*n-1, n*(n-1)-1)
-	}
-	if rng.Float32() < p {
-		g.Connect(n*n-1, n*n-2)
-	}
 	if len(g.List[n*n-1]) == 0 {
 		if rng.UintN(2) == 0 {
 			g.Connect(n*n-1, n*(n-1)-1)
@@ -185,25 +185,6 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 		for x := 1; x < n-1; x++ {
 			idx := x + y*n
 			//fmt.Printf("(%d, %d)\n", x, y)
-
-			// Connect to neighbors with probability p
-			// North
-			if rng.Float32() < p {
-				g.Connect(idx, idx-n)
-			}
-			// South
-			if rng.Float32() < p {
-				g.Connect(idx, idx+n)
-			}
-			// East
-			if rng.Float32() < p {
-				g.Connect(idx, idx+1)
-			}
-			// West
-			if rng.Float32() < p {
-				g.Connect(idx, idx-1)
-			}
-
 			if len(g.List[idx]) == 0 {
 				selection := rng.UintN(4)
 				switch selection {
@@ -238,7 +219,8 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 		v := vq.Pop()
 		// For each connected vert w from v to w
 		for _, w := range g.List[v] {
-			_, notVisited := unvisited[w]; if notVisited {
+			_, notVisited := unvisited[w]
+			if notVisited {
 				delete(unvisited, w)
 				subgraph = append(subgraph, w)
 				vq.Push(w)
@@ -251,7 +233,7 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 	}
 
 	// Collect disjoint set of connected subgraphs
-	disjoint := make([][]int, 0, n*n / 2)
+	disjoint := make([][]int, 0, n*n)
 
 	//sort.Sort(sort.IntSlice(subgraph))
 	disjoint = append(disjoint, subgraph)
@@ -264,24 +246,21 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 		}
 		subgraph = make([]int, 0, len(unvisited))
 		vq.Push(root)
-		//subgraph = append(subgraph, root)
 
 		for !vq.IsEmpty() {
 			v := vq.Pop()
 			// For each connected vert w from v to w
 			for _, w := range g.List[v] {
-				_, notVisited := unvisited[w]; if notVisited {
+				_, notVisited := unvisited[w]
+				if notVisited {
 					delete(unvisited, w)
 					subgraph = append(subgraph, w)
 					vq.Push(w)
 				}
 			}
 		}
-		//sort.Sort(sort.IntSlice(subgraph))
 		disjoint = append(disjoint, subgraph)
 	}
-
-	//fmt.Println(disjoint)
 
 	// Connect adjacent subgraphs
 	found := false
@@ -299,7 +278,7 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 			// search for valid grid connection in another set
 			for i := 1; i < len(disjoint); i++ {
 				for _, w := range disjoint[i] {
-					if g.isValidGridConnection(v, w) {
+					if g.IsValidGridConnection(v, w) {
 						found = true
 						otheridx = i
 						g.Connect(v, w)
@@ -312,7 +291,7 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 			}
 			idx++
 		}
-		// Merge first and connected set then delete the other set
+		// Merge the first and newly connected set then delete the other set
 		disjoint[0] = slices.Concat(disjoint[0], disjoint[otheridx])
 		disjoint = slices.Delete(disjoint, otheridx, otheridx+1)
 	}
@@ -320,33 +299,59 @@ func RandomConnectedGrid(rng *rand.Rand, n int, p float32) *Graph {
 	return g
 }
 
-func (g Graph) isValidGridConnection(v int, w int) bool {
-	n := g.GridSize
+func (g Graph) IsValidGridConnection(v int, w int) bool {
+	return g.RelativeGridDirection(v, w) >= 0
+}
 
-	// Corners
-	switch v {
-	case 0:
-		return w == 1 || w == n
-	case n-1:
-		return w == (n-2) || w == (2*n-1)
-	case n*(n-1):
-		return w == n*(n-2) || w == n*(n-1)+1
-	case n*n-1:
-		return w == n*n-2 || w == n*(n-1)-1
+// func (g Graph) IsValidGridConnection(v int, w int) bool {
+// 	n := g.GridSize
+//
+// 	// Corners
+// 	switch v {
+// 	case 0:
+// 		return w == 1 || w == n
+// 	case n - 1:
+// 		return w == (n-2) || w == (2*n-1)
+// 	case n * (n - 1):
+// 		return w == n*(n-2) || w == n*(n-1)+1
+// 	case n*n - 1:
+// 		return w == n*n-2 || w == n*(n-1)-1
+// 	}
+//
+// 	// Edges
+// 	if v < n {
+// 		return w == (v-1) || w == (v+1) || w == (v+n)
+// 	} else if v > n*(n-1) {
+// 		return w == (v-1) || w == (v+1) || w == (v-n)
+// 	} else if v%n == 0 {
+// 		return w == (v+1) || w == (v-n) || w == (v+n)
+// 	} else if v%n == 1 {
+// 		return w == (v-1) || w == (v-n) || w == (v+n)
+// 	}
+//
+// 	return w == (v+1) || w == (v-1) || w == (v+n) || w == (v-n)
+// }
+
+// Returns
+//
+//	0: w is N of v
+//	1: w is E of v
+//	2: w is S of v
+//	3: w is W of v
+//
+// -1: Not an adjacent vertex
+func (g Graph) RelativeGridDirection(v int, w int) int {
+	switch w - v {
+	case -g.GridSize:
+		return 0
+	case 1:
+		return 1
+	case g.GridSize:
+		return 2
+	case -1:
+		return 3
 	}
-
-	// Edges
-	if v < n {
-		return w == (v-1) || w == (v+1) || w == (v+n)
-	} else if v > n*(n-1) {
-		return w == (v-1) || w == (v+1) || w == (v-n)
-	} else if v % n == 0 {
-		return w == (v+1) || w == (v-n) || w == (v+n)
-	} else if v % n == 1 {
-		return w == (v-1) || w == (v-n) || w == (v+n)
-	}
-
-	return w == (v+1) || w == (v-1) || w == (v+n) || w == (v-n)
+	return -1
 }
 
 func (g Graph) PrintGrid() {
@@ -360,11 +365,11 @@ func (g Graph) PrintGrid() {
 	// | |  | | |
 	// o-o  o-o-o 1
 	//      | | |
-	//      o-o-o 
+	//      o-o-o
 	// 0 1  0 1 2
 	for y := range n - 1 {
 		sb.WriteString("\n  o")
-		for x := range n - 1{
+		for x := range n - 1 {
 			idx := x + y*n
 			if g.IsEdge(idx, idx+1) {
 				sb.WriteString("-")
