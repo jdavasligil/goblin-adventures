@@ -64,7 +64,7 @@ func TestBFS(t *testing.T) {
 
 func TestRandomConnectedGrid(t *testing.T) {
 	rng := rand.New(rand.NewPCG(16490829034, 2923842757))
-	g := RandomConnectedGrid(rng, 4, 0.0)
+	g := RandomConnectedGrid(rng, 16, 0.5)
 	if !g.IsConnected() {
 		t.Log("Random grid is not connected")
 		t.Fail()

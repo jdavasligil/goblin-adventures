@@ -129,7 +129,7 @@ func (d *Dungeon) UpdateChunk() {
 		for _, w := range adj {
 			dir := g.RelativeGridDirection(v, w)
 			d.Chunk.Rooms[v].Doors[dir] = DoorState(RandomState(d.Rand, DoorCDF))
-			d.Chunk.Rooms[w].Doors[OppositeDirection(dir)] = d.Chunk.Rooms[w].Doors[South]
+			d.Chunk.Rooms[w].Doors[OppositeDirection(dir)] = d.Chunk.Rooms[v].Doors[dir]
 		}
 	}
 
