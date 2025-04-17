@@ -71,6 +71,7 @@ func NewChatBot(g *GameServer) *ChatBot {
 	b.GetEnvironmentVariables()
 	b.MakeAuthRequest()
 	b.GetUserAuthToken()
+	//b.GetClientAuthToken()
 
 	return b
 }
@@ -118,7 +119,7 @@ func (b *ChatBot) GetEnvironmentVariables() {
 // Creates a link to request authorization from user. Spins up a temporary
 // http server to accept a single redirect and reads the query params.
 //
-// #MUST be called BEFORE GetClientAuthToken
+// # MUST be called BEFORE GetClientAuthToken
 //
 // Follows the Authorization code grant flow. Link:
 // https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#authorization-code-grant-flow
@@ -315,13 +316,17 @@ func (b *ChatBot) ValidateUserAuthToken() {
 }
 
 // MUST be called AFTER GetClientAuthToken
-func (b *ChatBot) RequestUserInfo(user string) {
+func (b *ChatBot) ValidateClientAuthToken() {
+	if b.clientToken == nil {
+		log.Fatal("Error: ValidateClientAuthToken called before GetClientAuthToken")
+	}
+
 	req := &http.Request{
 		Method: "GET",
 		URL: &url.URL{
 			Scheme: "https",
-			Host:   "api.twitch.tv",
-			Path:   "/helix/users?login=" + user,
+			Host:   "id.twitch.tv",
+			Path:   "/oauth2/validate",
 		},
 		Header: http.Header{},
 	}
@@ -336,6 +341,41 @@ func (b *ChatBot) RequestUserInfo(user string) {
 	}
 	defer response.Body.Close()
 
+	resBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	fmt.Println(string(resBody))
+	// TODO Destructure json https://dev.twitch.tv/docs/authentication/validate-tokens/
+	// perform proper validation
+}
+
+func (b *ChatBot) RequestUserInfo(user string) {
+	req := &http.Request{
+		Method: "GET",
+		URL: &url.URL{
+			Scheme:   "https",
+			Host:     "api.twitch.tv",
+			Path:     "/helix/users",
+			RawQuery: "login=" + user,
+		},
+		Header: http.Header{},
+	}
+
+	b.clientToken.SetAuthHeader(req)
+	req.Header.Set("Client-ID", b.ClientID)
+
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer response.Body.Close()
+
+	log.Println("Response Status:", response.Status)
+
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		log.Println(err)
@@ -348,9 +388,9 @@ func (b *ChatBot) RequestUserInfo(user string) {
 		log.Println(err)
 		return
 	}
-	resMap := jsonResponse.Data[0]
+	PrettyPrint(jsonResponse)
+	//resMap := jsonResponse.Data[0]
 
-	PrettyPrint(resMap)
 }
 
 func (b *ChatBot) SendMessage(m string) {

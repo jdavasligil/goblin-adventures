@@ -8,4 +8,4 @@ require (
 	golang.org/x/oauth2 v0.28.0
 )
 
-require github.com/jdavasligil/go-ecs v1.1.1 // indirect
+require github.com/jdavasligil/go-ecs v1.1.1

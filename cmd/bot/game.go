@@ -77,7 +77,7 @@ func NewGameServer() *GameServer {
 		Query: q,
 
 		Party: Party{
-			PlayersMax: 10,
+			PlayersMax:       10,
 			PlayerCharacters: make(map[string]Character),
 		},
 
